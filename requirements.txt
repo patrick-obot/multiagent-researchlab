@@ -1,0 +1,9 @@
+python-ulid
+aiosqlite
+fastapi
+uvicorn[standard]
+httpx
+feedparser
+python-dateutil
+pytest
+pytest-asyncio

@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PiLab Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0f0f0f;
+    --bg-card: #1a1a1a;
+    --bg-hover: #222;
+    --border: #2a2a2a;
+    --text: #e0e0e0;
+    --text-dim: #888;
+    --scout: #1D9E75;
+    --evaluator: #7F77DD;
+    --planner: #D85A30;
+    --approved: #1D9E75;
+    --rejected: #c44;
+    --pending: #888;
+    --radius: 8px;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 0.85em; }
+
+  /* Top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
+  }
+  .topbar h1 { font-size: 1.3em; font-weight: 700; letter-spacing: -0.5px; }
+  .topbar h1 span { color: var(--scout); }
+  .agent-pills { display: flex; gap: 10px; }
+  .pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 20px;
+    font-size: 0.8em; font-weight: 500;
+    background: var(--bg); border: 1px solid var(--border);
+  }
+  .pill .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--rejected);
+  }
+  .pill.live .dot { background: var(--approved); }
+  .pill[data-agent="scout"] { color: var(--scout); }
+  .pill[data-agent="evaluator"] { color: var(--evaluator); }
+  .pill[data-agent="planner"] { color: var(--planner); }
+  .last-updated { font-size: 0.75em; color: var(--text-dim); }
+
+  /* Metrics row */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    padding: 20px 24px;
+  }
+  .metric-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .metric-card .value { font-size: 2em; font-weight: 700; }
+  .metric-card .label { font-size: 0.8em; color: var(--text-dim); margin-top: 4px; }
+
+  /* Pipeline columns */
+  .pipeline {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    padding: 0 24px 20px;
+    min-height: 300px;
+  }
+  .column {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    max-height: 500px;
+    overflow-y: auto;
+  }
+  .column h3 {
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .column h3 .count {
+    background: var(--border);
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.9em;
+  }
+
+  .card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .card:hover { border-color: #555; }
+  .card .card-title { font-size: 0.85em; font-weight: 500; margin-bottom: 4px; }
+  .card .card-meta {
+    display: flex; gap: 8px; align-items: center;
+    font-size: 0.7em; color: var(--text-dim);
+  }
+  .tag {
+    padding: 1px 6px; border-radius: 4px; font-size: 0.7em;
+    background: var(--border); color: var(--text);
+  }
+  .tag.ai { background: #1a3a2a; color: var(--scout); }
+  .tag.telco { background: #2a1a3a; color: var(--evaluator); }
+  .tag.fintech { background: #3a2a1a; color: var(--planner); }
+  .tag.edge { background: #1a2a3a; color: #5aa; }
+
+  .btn {
+    padding: 4px 12px; border-radius: 4px; border: none;
+    font-size: 0.75em; font-weight: 600; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.8; }
+  .btn-approve { background: var(--approved); color: #fff; }
+  .btn-sm { padding: 2px 8px; font-size: 0.7em; }
+
+  /* Bottom split */
+  .bottom {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 0 24px 24px;
+  }
+  .panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .panel h3 {
+    font-size: 0.85em; font-weight: 600;
+    margin-bottom: 12px; color: var(--text-dim);
+  }
+  .event-item {
+    display: flex; gap: 8px; align-items: flex-start;
+    padding: 6px 0; border-bottom: 1px solid var(--border);
+    font-size: 0.8em;
+  }
+  .event-item:last-child { border: none; }
+  .event-agent {
+    font-weight: 600; font-size: 0.75em;
+    padding: 1px 6px; border-radius: 4px; white-space: nowrap;
+  }
+  .event-agent.scout { background: #1a3a2a; color: var(--scout); }
+  .event-agent.evaluator { background: #2a1a3a; color: var(--evaluator); }
+  .event-agent.planner { background: #3a2a1a; color: var(--planner); }
+  .event-time { color: var(--text-dim); white-space: nowrap; }
+
+  .rejection-item {
+    padding: 6px 0; border-bottom: 1px solid var(--border);
+    font-size: 0.8em;
+  }
+  .rejection-item:last-child { border: none; }
+  .reason-code {
+    font-weight: 600; color: var(--rejected); font-size: 0.75em;
+    padding: 1px 6px; border-radius: 4px; background: #3a1a1a;
+  }
+
+  .filter-row {
+    display: flex; gap: 8px; margin-bottom: 10px;
+  }
+  .filter-row select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    padding: 3px 8px; border-radius: 4px; font-size: 0.75em;
+  }
+
+  /* Project detail modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); z-index: 100;
+    justify-content: center; align-items: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+    width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;
+  }
+  .modal h2 { font-size: 1.1em; margin-bottom: 16px; }
+  .modal .close-btn {
+    float: right; background: none; border: none;
+    color: var(--text-dim); font-size: 1.2em; cursor: pointer;
+  }
+  .milestone-item {
+    padding: 10px; margin-bottom: 8px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .milestone-item .ms-header {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .milestone-item .ms-title { font-weight: 500; font-size: 0.9em; }
+  .milestone-item .ms-desc { font-size: 0.8em; color: var(--text-dim); margin-top: 4px; }
+  .milestone-item .ms-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .milestone-item select {
+    background: var(--bg-card); color: var(--text); border: 1px solid var(--border);
+    padding: 2px 6px; border-radius: 4px; font-size: 0.75em;
+  }
+  .learning-note {
+    margin-top: 6px; padding: 6px 10px;
+    background: #1a2a1a; border-left: 3px solid var(--scout);
+    font-size: 0.8em; border-radius: 0 4px 4px 0;
+  }
+  .status-badge {
+    display: inline-block; padding: 1px 8px; border-radius: 4px;
+    font-size: 0.7em; font-weight: 600;
+  }
+  .status-badge.pending { background: #333; color: var(--pending); }
+  .status-badge.in_progress { background: #1a2a3a; color: #5af; }
+  .status-badge.completed { background: #1a3a2a; color: var(--approved); }
+  .status-badge.blocked { background: #3a1a1a; color: var(--rejected); }
+
+  @media (max-width: 900px) {
+    .pipeline { grid-template-columns: 1fr; }
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .bottom { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="topbar">
+  <h1><span>Pi</span>Lab</h1>
+  <div class="agent-pills">
+    <div class="pill" data-agent="scout" id="pill-scout">
+      <span class="dot"></span> Scout
+    </div>
+    <div class="pill" data-agent="evaluator" id="pill-evaluator">
+      <span class="dot"></span> Evaluator
+    </div>
+    <div class="pill" data-agent="planner" id="pill-planner">
+      <span class="dot"></span> Planner
+    </div>
+  </div>
+  <span class="last-updated mono" id="last-updated">--</span>
+</div>
+
+<!-- Metrics -->
+<div class="metrics">
+  <div class="metric-card">
+    <div class="value" id="m-scouted">0</div>
+    <div class="label">Scouted This Week</div>
+  </div>
+  <div class="metric-card">
+    <div class="value" id="m-awaiting">0</div>
+    <div class="label">Awaiting Approval</div>
+  </div>
+  <div class="metric-card">
+    <div class="value" id="m-rejected">0</div>
+    <div class="label">Rejected Total</div>
+  </div>
+  <div class="metric-card">
+    <div class="value" id="m-active">0</div>
+    <div class="label">Projects Active</div>
+  </div>
+</div>
+
+<!-- Pipeline Columns -->
+<div class="pipeline">
+  <div class="column" id="col-scouted">
+    <h3>Scouted <span class="count" id="cnt-scouted">0</span></h3>
+  </div>
+  <div class="column" id="col-evaluating">
+    <h3>Evaluating <span class="count" id="cnt-evaluating">0</span></h3>
+  </div>
+  <div class="column" id="col-awaiting">
+    <h3>Awaiting Approval <span class="count" id="cnt-awaiting">0</span></h3>
+  </div>
+  <div class="column" id="col-inprogress">
+    <h3>In Progress <span class="count" id="cnt-inprogress">0</span></h3>
+  </div>
+  <div class="column" id="col-done">
+    <h3>Done <span class="count" id="cnt-done">0</span></h3>
+  </div>
+</div>
+
+<!-- Bottom Split -->
+<div class="bottom">
+  <div class="panel" id="events-panel">
+    <h3>Live Agent Feed</h3>
+    <div id="events-list"></div>
+  </div>
+  <div class="panel" id="rejections-panel">
+    <h3>Rejection Archive</h3>
+    <div class="filter-row">
+      <select id="rejection-filter" onchange="loadRejections()">
+        <option value="">All reasons</option>
+        <option value="requires_gpu">Requires GPU</option>
+        <option value="ram_exceeded">RAM Exceeded</option>
+        <option value="no_arm_support">No ARM Support</option>
+        <option value="closed_source">Closed Source</option>
+        <option value="not_novel">Not Novel</option>
+        <option value="low_priority">Low Priority</option>
+        <option value="not_reproducible">Not Reproducible</option>
+        <option value="too_slow">Too Slow</option>
+      </select>
+    </div>
+    <div id="rejections-list"></div>
+  </div>
+</div>
+
+<!-- Project Detail Modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <button class="close-btn" onclick="closeModal()">&times;</button>
+    <h2 id="modal-title"></h2>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? `${window.location.protocol}//${window.location.hostname}:8000`
+  : `${window.location.protocol}//${window.location.hostname}:8000`;
+
+// Override API_BASE if served from the same FastAPI
+const API_BASE = API;
+
+async function apiFetch(path, opts) {
+  const resp = await fetch(`${API_BASE}${path}`, opts);
+  if (!resp.ok && resp.status !== 404) console.error(`API ${path}: ${resp.status}`);
+  return resp;
+}
+
+function timeAgo(iso) {
+  if (!iso) return '--';
+  const diff = (Date.now() - new Date(iso + 'Z').getTime()) / 1000;
+  if (diff < 60) return `${Math.floor(diff)}s ago`;
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return `${Math.floor(diff/86400)}d ago`;
+}
+
+function topicTags(tags) {
+  if (!tags) return '';
+  return tags.split(',').map(t => {
+    t = t.trim();
+    return `<span class="tag ${t}">${t}</span>`;
+  }).join(' ');
+}
+
+function makeCard(item, showApprove) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="card-title">${item.title || 'Untitled'}</div>
+    <div class="card-meta">
+      ${topicTags(item.topic_tags)}
+      <span class="mono">${timeAgo(item.discovered_at || item.approved_at || item.started_at)}</span>
+    </div>
+    ${showApprove ? `<button class="btn btn-approve btn-sm" onclick="event.stopPropagation(); approveProject('${item.id}')">Approve</button>` : ''}
+  `;
+  if (item.id && (item.status === 'in_progress' || item.status === 'completed' || item.status === 'awaiting_approval')) {
+    card.onclick = () => openProjectDetail(item.id);
+  }
+  return card;
+}
+
+// --- Data loading ---
+
+async function loadStats() {
+  try {
+    const resp = await apiFetch('/stats');
+    const s = await resp.json();
+    document.getElementById('m-scouted').textContent = s.scouted_this_week || 0;
+    document.getElementById('m-awaiting').textContent = s.projects_awaiting_approval || 0;
+    document.getElementById('m-rejected').textContent = s.rejections_total || 0;
+    document.getElementById('m-active').textContent = s.projects_in_progress || 0;
+
+    // Agent status pills
+    const threshold = 180000; // 3 minutes in ms
+    const now = Date.now();
+    for (const agent of ['scout', 'evaluator', 'planner']) {
+      const pill = document.getElementById(`pill-${agent}`);
+      const hb = s[`${agent}_last_heartbeat`];
+      if (hb && (now - new Date(hb + 'Z').getTime()) < threshold) {
+        pill.classList.add('live');
+      } else {
+        pill.classList.remove('live');
+      }
+    }
+  } catch (e) { console.error('Stats load failed:', e); }
+}
+
+async function loadPipeline() {
+  try {
+    // Scouted findings
+    const scouted = await (await apiFetch('/findings?status=scouted&limit=20')).json();
+    const colScouted = document.getElementById('col-scouted');
+    colScouted.innerHTML = `<h3>Scouted <span class="count">${scouted.length}</span></h3>`;
+    scouted.forEach(f => colScouted.appendChild(makeCard(f, false)));
+
+    // Evaluating (claimed jobs)
+    const evaluating = await (await apiFetch('/findings?status=evaluating&limit=20')).json();
+    const colEval = document.getElementById('col-evaluating');
+    colEval.innerHTML = `<h3>Evaluating <span class="count">${evaluating.length}</span></h3>`;
+    evaluating.forEach(f => colEval.appendChild(makeCard(f, false)));
+
+    // Awaiting approval (projects)
+    const awaiting = await (await apiFetch('/projects?status=awaiting_approval')).json();
+    const colAwaiting = document.getElementById('col-awaiting');
+    colAwaiting.innerHTML = `<h3>Awaiting Approval <span class="count">${awaiting.length}</span></h3>`;
+    awaiting.forEach(p => colAwaiting.appendChild(makeCard(p, true)));
+
+    // In progress
+    const inProgress = await (await apiFetch('/projects?status=in_progress')).json();
+    const colIP = document.getElementById('col-inprogress');
+    colIP.innerHTML = `<h3>In Progress <span class="count">${inProgress.length}</span></h3>`;
+    inProgress.forEach(p => colIP.appendChild(makeCard(p, false)));
+
+    // Done
+    const done = await (await apiFetch('/projects?status=completed')).json();
+    const colDone = document.getElementById('col-done');
+    colDone.innerHTML = `<h3>Done <span class="count">${done.length}</span></h3>`;
+    done.forEach(p => colDone.appendChild(makeCard(p, false)));
+  } catch (e) { console.error('Pipeline load failed:', e); }
+}
+
+async function loadEvents() {
+  try {
+    const events = await (await apiFetch('/events?limit=30')).json();
+    const list = document.getElementById('events-list');
+    list.innerHTML = events
+      .filter(e => e.event_type !== 'heartbeat')
+      .map(e => `
+        <div class="event-item">
+          <span class="event-agent ${e.agent_name}">${e.agent_name}</span>
+          <span>${e.message || e.event_type}</span>
+          <span class="event-time mono">${timeAgo(e.occurred_at)}</span>
+        </div>
+      `).join('');
+  } catch (e) { console.error('Events load failed:', e); }
+}
+
+async function loadRejections() {
+  try {
+    const filter = document.getElementById('rejection-filter').value;
+    const url = filter ? `/rejections?reason_code=${filter}&limit=30` : '/rejections?limit=30';
+    const rejections = await (await apiFetch(url)).json();
+    const list = document.getElementById('rejections-list');
+    list.innerHTML = rejections.map(r => `
+      <div class="rejection-item">
+        <span class="reason-code">${r.reason_code || 'unknown'}</span>
+        <span style="margin-left:8px">${r.reason_detail || ''}</span>
+        <span class="mono" style="margin-left:8px;color:var(--text-dim)">${timeAgo(r.rejected_at)}</span>
+      </div>
+    `).join('');
+  } catch (e) { console.error('Rejections load failed:', e); }
+}
+
+// --- Actions ---
+
+async function approveProject(projectId) {
+  try {
+    await apiFetch(`/projects/${projectId}/approve`, { method: 'POST' });
+    await refresh();
+  } catch (e) { console.error('Approve failed:', e); }
+}
+
+async function updateMilestoneStatus(milestoneId, status) {
+  try {
+    await apiFetch(`/milestones/${milestoneId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+  } catch (e) { console.error('Milestone update failed:', e); }
+}
+
+// --- Project detail modal ---
+
+async function openProjectDetail(projectId) {
+  try {
+    const project = await (await apiFetch(`/projects/${projectId}`)).json();
+    const milestones = await (await apiFetch(`/projects/${projectId}/milestones`)).json();
+    const learnings = await (await apiFetch(`/projects/${projectId}/learnings`)).json();
+
+    document.getElementById('modal-title').textContent = project.title;
+
+    const learningsByMs = {};
+    learnings.forEach(l => {
+      if (!learningsByMs[l.milestone_id]) learningsByMs[l.milestone_id] = [];
+      learningsByMs[l.milestone_id].push(l);
+    });
+
+    let html = `<p style="font-size:0.85em;color:var(--text-dim);margin-bottom:16px">
+      Status: <span class="status-badge ${project.status}">${project.status}</span>
+      &nbsp; Topics: ${topicTags(project.topic_tags)}
+    </p>`;
+
+    html += '<div>';
+    milestones.forEach(ms => {
+      const msLearnings = learningsByMs[ms.id] || [];
+      html += `
+        <div class="milestone-item">
+          <div class="ms-header">
+            <span class="ms-title">${ms.sequence}. ${ms.title}</span>
+            <span class="status-badge ${ms.status}">${ms.status}</span>
+          </div>
+          ${ms.description ? `<div class="ms-desc">${ms.description}</div>` : ''}
+          ${ms.done_condition ? `<div class="ms-desc" style="font-style:italic">Done when: ${ms.done_condition}</div>` : ''}
+          <div class="ms-actions">
+            <select onchange="updateMilestoneStatus('${ms.id}', this.value)">
+              <option value="pending" ${ms.status==='pending'?'selected':''}>Pending</option>
+              <option value="in_progress" ${ms.status==='in_progress'?'selected':''}>In Progress</option>
+              <option value="completed" ${ms.status==='completed'?'selected':''}>Completed</option>
+              <option value="blocked" ${ms.status==='blocked'?'selected':''}>Blocked</option>
+            </select>
+          </div>
+          ${msLearnings.map(l => `
+            <div class="learning-note">
+              <strong>${l.category || 'note'}:</strong> ${l.note}
+            </div>
+          `).join('')}
+        </div>
+      `;
+    });
+    html += '</div>';
+
+    document.getElementById('modal-body').innerHTML = html;
+    document.getElementById('modal-overlay').classList.add('active');
+  } catch (e) { console.error('Project detail failed:', e); }
+}
+
+function closeModal(event) {
+  if (event && event.target !== document.getElementById('modal-overlay')) return;
+  document.getElementById('modal-overlay').classList.remove('active');
+}
+
+// --- Refresh loop ---
+
+async function refresh() {
+  await Promise.all([loadStats(), loadPipeline(), loadEvents(), loadRejections()]);
+  document.getElementById('last-updated').textContent =
+    'Updated ' + new Date().toLocaleTimeString();
+}
+
+// Initial load
+refresh();
+
+// Auto-refresh every 30 seconds
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>
