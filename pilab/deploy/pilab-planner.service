@@ -4,11 +4,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=mypi
-WorkingDirectory=/home/mypi/Projects/multiagent_researchlab
-Environment=PILAB_API_BASE_URL=http://mypi:8000
+User=mypi3
+WorkingDirectory=/home/mypi3/Projects/multiagent_researchlab
+Environment=PILAB_API_BASE_URL=http://192.168.1.35:8000
 Environment=PILAB_LLM_PLANNER_URL=http://localhost:8082
-ExecStart=/home/mypi/Projects/multiagent_researchlab/.venv/bin/python -m pilab.planner.agent
+ExecStart=/home/mypi3/Projects/multiagent_researchlab/.venv/bin/python -m pilab.planner.agent
 Restart=always
 RestartSec=10
 
