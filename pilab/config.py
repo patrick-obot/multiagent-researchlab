@@ -39,15 +39,19 @@ DB_BUSY_TIMEOUT_MS: int = _env_int("DB_BUSY_TIMEOUT_MS", 10_000)
 
 API_HOST: str = _env("API_HOST", "0.0.0.0")
 API_PORT: int = _env_int("API_PORT", 8000)
-API_BASE_URL: str = _env("API_BASE_URL", "http://mypi:8000")
+API_BASE_URL: str = _env("API_BASE_URL", "http://localhost:8000")
 
 # ---------------------------------------------------------------------------
-# LLM servers (llama.cpp in server mode, one per Pi)
+# LLM servers (Ollama on Mac Mini, or llama.cpp for Pi cluster benchmarking)
 # ---------------------------------------------------------------------------
 
-LLM_SCOUT_URL: str = _env("LLM_SCOUT_URL", "http://localhost:8080")       # pi2 — Phi-3 Mini
-LLM_EVALUATOR_URL: str = _env("LLM_EVALUATOR_URL", "http://localhost:8081")  # mypi — Qwen2.5 7B
-LLM_PLANNER_URL: str = _env("LLM_PLANNER_URL", "http://localhost:8082")    # pi3 — Phi-3 Mini
+LLM_SCOUT_URL: str = _env("LLM_SCOUT_URL", "http://localhost:11434")
+LLM_EVALUATOR_URL: str = _env("LLM_EVALUATOR_URL", "http://localhost:11434")
+LLM_PLANNER_URL: str = _env("LLM_PLANNER_URL", "http://localhost:11434")
+
+LLM_SCOUT_MODEL: str = _env("LLM_SCOUT_MODEL", "phi3:mini")
+LLM_EVALUATOR_MODEL: str = _env("LLM_EVALUATOR_MODEL", "qwen2.5:14b")
+LLM_PLANNER_MODEL: str = _env("LLM_PLANNER_MODEL", "mistral:7b")
 
 LLM_RETRY_ATTEMPTS: int = _env_int("LLM_RETRY_ATTEMPTS", 3)
 LLM_RETRY_BACKOFF_BASE: float = _env_float("LLM_RETRY_BACKOFF_BASE", 2.0)
@@ -67,7 +71,7 @@ SCOUT_INTERVAL_RELEASES: int = _env_int("SCOUT_INTERVAL_RELEASES", 86400)
 SCOUT_INTERVAL_TELCO: int = _env_int("SCOUT_INTERVAL_TELCO", 86400)
 
 SCOUT_STARTUP_JITTER_MAX: int = _env_int("SCOUT_STARTUP_JITTER_MAX", 300)  # 0-5 min random jitter
-SCOUT_LLM_CONCURRENCY: int = _env_int("SCOUT_LLM_CONCURRENCY", 1)         # llama.cpp serves 1 at a time
+SCOUT_LLM_CONCURRENCY: int = _env_int("SCOUT_LLM_CONCURRENCY", 2)         # Ollama handles concurrent requests
 SCOUT_HN_TOP_N: int = _env_int("SCOUT_HN_TOP_N", 30)
 
 # ---------------------------------------------------------------------------
@@ -179,11 +183,13 @@ EVALUATOR_NOVELTY_MAX_TOKENS: int = 300
 EVALUATOR_NOVELTY_TEMPERATURE: float = 0.1
 
 EVALUATOR_FEASIBILITY_SYSTEM: str = (
-    "Assess against hard constraints: "
-    "3x Raspberry Pi 5, 8GB each (24GB total), no GPU, ARM aarch64, "
-    "1TB NVMe on mypi, gigabit ethernet, ~15 tok/s for 7B Q4. "
-    "Hard fail (score 1): requires CUDA/GPU, needs >20GB RAM, "
-    "no ARM path, closed weights, needs internet at inference. "
+    "Assess against our hardware capabilities. "
+    "Primary target: Mac Mini M4 16GB unified memory, Apple Silicon GPU, "
+    "MLX/Ollama inference, ~40 tok/s for 7B Q4, ~15 tok/s for 14B Q4. "
+    "Secondary target (benchmarking only): 3x Raspberry Pi 5, 8GB each, "
+    "ARM aarch64, no GPU, ~15 tok/s for 7B Q4. "
+    "Hard fail (score 1): requires NVIDIA CUDA specifically, needs >14GB RAM, "
+    "closed weights, needs internet at inference. "
     "Return JSON: "
     '{"pi_feasibility_score": int, "ram_estimate_gb": float, '
     '"requires_gpu": bool, "feasibility_notes": str, "reason_code": str|null}. '

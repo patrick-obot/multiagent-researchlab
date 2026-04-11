@@ -1,7 +1,7 @@
-"""llama.cpp HTTP client with JSON repair, retry, and structured output.
+"""LLM HTTP client with JSON repair, retry, and structured output.
 
-Talks to a llama.cpp server running in ``--server`` mode.  The main entry
-point is :func:`call_json` which sends a chat-completion request and
+Talks to an OpenAI-compatible endpoint (Ollama, llama.cpp, etc.).  The main
+entry point is :func:`call_json` which sends a chat-completion request and
 returns the parsed JSON object, handling common LLM output quirks.
 """
 
@@ -105,6 +105,7 @@ def repair_json(raw: str) -> Any:
 async def call_llm(
     base_url: str,
     *,
+    model: str | None = None,
     system: str,
     user: str,
     max_tokens: int = 256,
@@ -115,7 +116,7 @@ async def call_llm(
     Retries on HTTP 503 (server busy) with exponential backoff.
     """
     url = f"{base_url}/v1/chat/completions"
-    payload = {
+    payload: dict[str, Any] = {
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -124,6 +125,8 @@ async def call_llm(
         "temperature": temperature,
         "stream": False,
     }
+    if model is not None:
+        payload["model"] = model
 
     last_exc: Exception | None = None
     for attempt in range(config.LLM_RETRY_ATTEMPTS):
@@ -161,6 +164,7 @@ async def call_llm(
 async def call_json(
     base_url: str,
     *,
+    model: str | None = None,
     system: str,
     user: str,
     max_tokens: int = 256,
@@ -172,6 +176,7 @@ async def call_json(
     """
     raw = await call_llm(
         base_url,
+        model=model,
         system=system,
         user=user,
         max_tokens=max_tokens,

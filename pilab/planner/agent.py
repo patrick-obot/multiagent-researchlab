@@ -1,6 +1,6 @@
 """Planner agent — planning mode + monitor mode.
 
-Runs on pi3.  Uses Phi-3 Mini via llama.cpp for milestone generation
+Runs on Mac Mini M4.  Uses Mistral 7B via Ollama for milestone generation
 and learning note creation.
 """
 

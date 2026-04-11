@@ -1,6 +1,6 @@
 """Scout agent — asyncio main loop that polls sources and creates findings.
 
-Runs on pi2.  Communicates with the central API on mypi via HTTP.
+Runs on Mac Mini M4.  Communicates with the central API via HTTP.
 """
 
 from __future__ import annotations

@@ -1,14 +1,12 @@
 [Unit]
 Description=PiLab Scout Agent
-After=network.target
+After=network.target pilab-api.service
 
 [Service]
 Type=simple
-User=mypi2
-WorkingDirectory=/home/mypi2/Projects/multiagent_researchlab
-Environment=PILAB_API_BASE_URL=http://192.168.1.35:8000
-Environment=PILAB_LLM_SCOUT_URL=http://localhost:8080
-ExecStart=/home/mypi2/Projects/multiagent_researchlab/.venv/bin/python -m pilab.scout.agent
+WorkingDirectory=/opt/pilab
+Environment=PILAB_LLM_SCOUT_MODEL=phi3:mini
+ExecStart=/opt/pilab/.venv/bin/python -m pilab.scout.agent
 Restart=always
 RestartSec=10
 

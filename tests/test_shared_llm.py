@@ -109,6 +109,39 @@ async def test_call_llm_success():
         )
         assert result == "hello world"
 
+        # Verify no model field in payload when model is None
+        posted_payload = mock_client.post.call_args[1]["json"]
+        assert "model" not in posted_payload
+
+
+@pytest.mark.asyncio
+async def test_call_llm_with_model():
+    mock_response = {
+        "choices": [{"message": {"content": "hello"}}]
+    }
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = mock_response
+    mock_resp.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_resp)
+
+    with patch("pilab.shared.llm.httpx.AsyncClient") as MockClient:
+        MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        result = await call_llm(
+            "http://localhost:11434",
+            model="phi3:mini",
+            system="sys", user="usr",
+        )
+        assert result == "hello"
+
+        # Verify model field is present in payload
+        posted_payload = mock_client.post.call_args[1]["json"]
+        assert posted_payload["model"] == "phi3:mini"
+
 
 @pytest.mark.asyncio
 async def test_call_json_parses_response():

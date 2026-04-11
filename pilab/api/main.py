@@ -1,7 +1,8 @@
 """PiLab central data API.
 
-Runs on mypi and owns the SQLite database.  All agents and the dashboard
-communicate through this API instead of accessing the DB file directly.
+Runs on Mac Mini M4 and owns the SQLite database.  All agents and the
+dashboard communicate through this API instead of accessing the DB file
+directly.
 """
 
 from __future__ import annotations

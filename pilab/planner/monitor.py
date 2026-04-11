@@ -51,6 +51,7 @@ async def check_milestones(client: httpx.AsyncClient) -> None:
                 )
                 result = await call_json(
                     config.LLM_PLANNER_URL,
+                    model=config.LLM_PLANNER_MODEL,
                     system=config.PLANNER_LEARNING_SYSTEM,
                     user=user_prompt,
                     max_tokens=config.PLANNER_LEARNING_MAX_TOKENS,

@@ -1,7 +1,7 @@
 """Evaluator agent — polls job queue and evaluates findings.
 
-Runs on mypi.  Uses Qwen2.5 7B via llama.cpp for novelty scoring
-and Pi feasibility assessment.
+Runs on Mac Mini M4.  Uses Qwen 2.5 14B via Ollama for novelty scoring
+and feasibility assessment.
 """
 
 from __future__ import annotations
@@ -69,6 +69,7 @@ async def _evaluate_finding(client: httpx.AsyncClient, finding: dict) -> None:
     try:
         novelty_result = await call_json(
             config.LLM_EVALUATOR_URL,
+            model=config.LLM_EVALUATOR_MODEL,
             system=config.EVALUATOR_NOVELTY_SYSTEM,
             user=novelty_prompt,
             max_tokens=config.EVALUATOR_NOVELTY_MAX_TOKENS,
@@ -83,11 +84,12 @@ async def _evaluate_finding(client: httpx.AsyncClient, finding: dict) -> None:
     # Call 2: Pi feasibility
     feasibility_prompt = (
         f"Title: {title}\nSummary: {summary}\n\n"
-        f"Assess whether this can run on our Pi cluster."
+        f"Assess whether this can run on our lab hardware (Mac Mini M4 primary, Pi cluster for benchmarking)."
     )
     try:
         feasibility_result = await call_json(
             config.LLM_EVALUATOR_URL,
+            model=config.LLM_EVALUATOR_MODEL,
             system=config.EVALUATOR_FEASIBILITY_SYSTEM,
             user=feasibility_prompt,
             max_tokens=config.EVALUATOR_FEASIBILITY_MAX_TOKENS,

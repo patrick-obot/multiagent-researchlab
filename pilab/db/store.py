@@ -563,6 +563,76 @@ async def get_stats(db: aiosqlite.Connection) -> Row:
 
 
 # -------------------------------------------------------------------
+# Job queue
+# -------------------------------------------------------------------
+
+async def enqueue_job(
+    db: aiosqlite.Connection,
+    *,
+    id: str,
+    finding_id: str,
+) -> None:
+    await db.execute(
+        "INSERT INTO job_queue (id, finding_id, status, created_at) "
+        "VALUES (?, ?, 'pending', ?)",
+        (id, finding_id, _now()),
+    )
+    await db.commit()
+
+
+async def claim_job(
+    db: aiosqlite.Connection,
+    claimed_by: str,
+) -> Row | None:
+    now = _now()
+    async with db.execute(
+        "UPDATE job_queue SET status = 'claimed', claimed_by = ?, claimed_at = ? "
+        "WHERE id = (SELECT id FROM job_queue WHERE status = 'pending' ORDER BY created_at LIMIT 1) "
+        "RETURNING *",
+        (claimed_by, now),
+    ) as cur:
+        row = await cur.fetchone()
+    await db.commit()
+    return row
+
+
+async def complete_job(db: aiosqlite.Connection, job_id: str) -> None:
+    await db.execute(
+        "UPDATE job_queue SET status = 'done' WHERE id = ?",
+        (job_id,),
+    )
+    await db.commit()
+
+
+async def fail_job(
+    db: aiosqlite.Connection, job_id: str, error_message: str = ""
+) -> None:
+    await db.execute(
+        "UPDATE job_queue SET status = 'error', error_message = ? WHERE id = ?",
+        (error_message, job_id),
+    )
+    await db.commit()
+
+
+async def reap_stale_jobs(
+    db: aiosqlite.Connection, timeout_seconds: int
+) -> int:
+    """Reset claimed jobs that have been stuck longer than *timeout_seconds*."""
+    from datetime import timedelta
+
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(seconds=timeout_seconds)
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    cursor = await db.execute(
+        "UPDATE job_queue SET status = 'pending', claimed_by = NULL, claimed_at = NULL "
+        "WHERE status = 'claimed' AND claimed_at < ?",
+        (cutoff,),
+    )
+    await db.commit()
+    return cursor.rowcount
+
+
+# -------------------------------------------------------------------
 # Recent titles (for evaluator context)
 # -------------------------------------------------------------------
 

@@ -38,6 +38,7 @@ async def generate_milestones(client: httpx.AsyncClient, project: dict) -> None:
 
     milestones = await call_json(
         config.LLM_PLANNER_URL,
+        model=config.LLM_PLANNER_MODEL,
         system=config.PLANNER_MILESTONES_SYSTEM,
         user=user_prompt,
         max_tokens=config.PLANNER_MILESTONES_MAX_TOKENS,

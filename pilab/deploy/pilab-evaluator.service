@@ -4,11 +4,9 @@ After=network.target pilab-api.service
 
 [Service]
 Type=simple
-User=mypi
-WorkingDirectory=/home/mypi/Projects/multiagent_researchlab
-Environment=PILAB_API_BASE_URL=http://192.168.1.35:8000
-Environment=PILAB_LLM_EVALUATOR_URL=http://localhost:8081
-ExecStart=/home/mypi/Projects/multiagent_researchlab/.venv/bin/python -m pilab.evaluator.agent
+WorkingDirectory=/opt/pilab
+Environment=PILAB_LLM_EVALUATOR_MODEL=qwen2.5:14b
+ExecStart=/opt/pilab/.venv/bin/python -m pilab.evaluator.agent
 Restart=always
 RestartSec=10
 

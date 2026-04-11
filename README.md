@@ -1,100 +1,83 @@
 # PiLab — Multi-Agent Research Pipeline
 
-A distributed research pipeline running across 3 Raspberry Pi 5 devices, using local LLMs via llama.cpp to scout, evaluate, plan, and track AI/Telco/Fintech/Edge research.
+A research pipeline using local LLMs via Ollama on a Mac Mini M4 to scout, evaluate, plan, and track AI/Telco/Fintech/Edge research. A 3x Raspberry Pi 5 cluster is available for distributed inference benchmarking.
 
 ## Architecture
 
 ```
-mypi (1TB NVMe)          pi2 (256GB SSD)         pi3 (256GB SSD)
-+-----------------+      +-----------------+      +-----------------+
-| SQLite DB       |      | Scout Agent     |      | Planner Agent   |
-| FastAPI (8000)  |<---->| Phi-3 Mini(8080)|<---->| Phi-3 Mini(8082)|
-| Evaluator Agent |      |                 |      |                 |
-| Qwen 7B (8081)  |      +-----------------+      +-----------------+
-+-----------------+
-        ^                         ^                         ^
-        |         Gigabit Ethernet (HTTP API)                |
-        +------------------------+---------------------------+
+Mac Mini M4 (16GB unified memory)
++---------------------------------------------------+
+|  Ollama (MLX-accelerated)                         |
+|  ┌──────────┐ ┌─────────────┐ ┌───────────────┐  |
+|  │phi3:mini │ │qwen2.5:14b  │ │ mistral:7b    │  |
+|  │(Scout)   │ │(Evaluator)  │ │ (Planner)     │  |
+|  └────┬─────┘ └──────┬──────┘ └──────┬────────┘  |
+|       │               │              │            |
+|  ┌────┴───────────────┴──────────────┴────────┐   |
+|  │  FastAPI (port 8000) + SQLite DB           │   |
+|  │  Dashboard (vanilla JS)                    │   |
+|  └────────────────────────────────────────────┘   |
++---------------------------------------------------+
+
+Pi Cluster (benchmarking only, gigabit ethernet):
+  mypi (RPC master + exo) ── pi2 (RPC worker) ── pi3 (RPC worker)
 ```
 
-All inter-agent communication goes through the central FastAPI on mypi (no NFS/shared filesystem).
+All agents run on the Mac Mini. Inter-agent communication goes through the central FastAPI (no NFS/shared filesystem).
 
 ## Pipeline Flow
 
-1. **Scout** (pi2) polls sources (HN, GitHub, arXiv, Reddit, RSS, YouTube) on configurable intervals
+1. **Scout** polls sources (HN, GitHub, arXiv, Reddit, RSS, YouTube) on configurable intervals
 2. Findings are filtered by topic keywords (AI, Telco, Fintech, Edge) and summarised by Phi-3 Mini
-3. **Evaluator** (mypi) claims jobs from the queue, scores novelty + Pi feasibility via Qwen 7B
+3. **Evaluator** claims jobs from the queue, scores novelty + feasibility via Qwen 2.5 14B
 4. Approved findings become projects; rejected ones are archived with reason codes
-5. **Planner** (pi3) generates milestones for approved projects via Phi-3 Mini
+5. **Planner** generates milestones for approved projects via Mistral 7B
 6. Dashboard shows the full pipeline state with live agent status
 
 ## Setup
 
-### Prerequisites (all Pis)
+### Prerequisites
 
 ```bash
-# Install Python deps
-cd /home/mypi/Projects/multiagent_researchlab
+# Install Ollama (https://ollama.com)
+# Pull required models
+ollama pull phi3:mini
+ollama pull qwen2.5:14b
+ollama pull mistral:7b
+
+# Clone and install Python deps
+cd /opt/pilab  # or your preferred location
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### mypi — Database, API, Evaluator
+### Start Services
 
 ```bash
-# Create DB directory
-sudo mkdir -p /mnt/pilab
-sudo chown mypi:mypi /mnt/pilab
+# Start Ollama (if not already running)
+ollama serve
 
-# Download Qwen2.5 7B Q4
-# Place GGUF at a known path, e.g. /mnt/pilab/models/qwen2.5-7b-q4_k_m.gguf
+# Start the API
+uvicorn pilab.api.main:app --host 0.0.0.0 --port 8000
 
-# Start llama.cpp server
-llama-server -m /mnt/pilab/models/qwen2.5-7b-q4_k_m.gguf \
-  --host 0.0.0.0 --port 8081 -c 2048 -ngl 0
-
-# Install and start services
-sudo cp pilab/deploy/pilab-api.service /etc/systemd/system/
-sudo cp pilab/deploy/pilab-evaluator.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now pilab-api pilab-evaluator
+# Start agents (each in its own terminal, or use systemd)
+python -m pilab.scout.agent
+python -m pilab.evaluator.agent
+python -m pilab.planner.agent
 ```
 
-### pi2 — Scout
+### systemd Deployment
 
 ```bash
-# Download Phi-3 Mini Q4
-# Place GGUF at a known path
-
-# Start llama.cpp server
-llama-server -m /path/to/phi-3-mini-q4_k_m.gguf \
-  --host 0.0.0.0 --port 8080 -c 2048 -ngl 0
-
-# Install and start service
-sudo cp pilab/deploy/pilab-scout.service /etc/systemd/system/
+sudo cp pilab/deploy/pilab-*.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now pilab-scout
-```
-
-### pi3 — Planner
-
-```bash
-# Download Phi-3 Mini Q4 (same model as pi2)
-
-# Start llama.cpp server
-llama-server -m /path/to/phi-3-mini-q4_k_m.gguf \
-  --host 0.0.0.0 --port 8082 -c 2048 -ngl 0
-
-# Install and start service
-sudo cp pilab/deploy/pilab-planner.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now pilab-planner
+sudo systemctl enable --now pilab-api pilab-scout pilab-evaluator pilab-planner
 ```
 
 ### Dashboard
 
-The dashboard is served from the FastAPI app at `http://mypi:8000/dashboard/`.
+The dashboard is served from the FastAPI app at `http://localhost:8000/dashboard/`.
 No separate server needed.
 
 ## Configuration
@@ -105,11 +88,27 @@ See `pilab/config.py` for the full list. Key variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PILAB_DB_PATH` | `/mnt/pilab/pilab.db` | SQLite database path |
-| `PILAB_API_BASE_URL` | `http://mypi:8000` | Central API URL |
-| `PILAB_LLM_SCOUT_URL` | `http://localhost:8080` | Scout LLM endpoint |
-| `PILAB_LLM_EVALUATOR_URL` | `http://localhost:8081` | Evaluator LLM endpoint |
-| `PILAB_LLM_PLANNER_URL` | `http://localhost:8082` | Planner LLM endpoint |
+| `PILAB_API_BASE_URL` | `http://localhost:8000` | Central API URL |
+| `PILAB_LLM_SCOUT_URL` | `http://localhost:11434` | Scout LLM endpoint |
+| `PILAB_LLM_EVALUATOR_URL` | `http://localhost:11434` | Evaluator LLM endpoint |
+| `PILAB_LLM_PLANNER_URL` | `http://localhost:11434` | Planner LLM endpoint |
+| `PILAB_LLM_SCOUT_MODEL` | `phi3:mini` | Scout model name |
+| `PILAB_LLM_EVALUATOR_MODEL` | `qwen2.5:14b` | Evaluator model name |
+| `PILAB_LLM_PLANNER_MODEL` | `mistral:7b` | Planner model name |
 | `PILAB_LOG_LEVEL` | `INFO` | Logging level |
+
+## Pi Cluster (Benchmarking)
+
+The 3x Raspberry Pi 5 cluster (8GB each, ARM aarch64) is retained for distributed inference experiments. It uses llama.cpp RPC mode:
+
+- **mypi** (1TB NVMe): RPC master + exo node
+- **pi2** (256GB SSD): RPC worker on port 50052
+- **pi3** (256GB SSD): RPC worker on port 50052
+
+To use the Pi cluster for a benchmark, override the LLM URL for the relevant agent:
+```bash
+PILAB_LLM_EVALUATOR_URL=http://mypi:8081 python -m pilab.evaluator.agent
+```
 
 ## Testing
 
@@ -118,8 +117,8 @@ source .venv/bin/activate
 python -m pytest tests/ -v
 ```
 
-116 tests covering all modules:
-- DB store (34), migrations (4), shared modules (21)
+117 tests covering all modules:
+- DB store (34), migrations (4), shared modules (22)
 - Scout filter/dedup/summariser/sources (20)
 - Evaluator verdict logic (5), Planner milestones/monitor (5)
 - API endpoints (23)
@@ -128,8 +127,8 @@ All tests use in-memory SQLite and mocked LLM/HTTP calls — no external service
 
 ## Monitoring
 
-- Dashboard: `http://mypi:8000/dashboard/`
-- Swagger docs: `http://mypi:8000/docs`
+- Dashboard: `http://localhost:8000/dashboard/`
+- Swagger docs: `http://localhost:8000/docs`
 - Agent status pills show live/offline based on heartbeats (3-minute threshold)
 - Agent events are logged to `agent_events` table and visible in the dashboard feed
 - All agents log to stdout (captured by journald): `journalctl -u pilab-api -f`
@@ -145,7 +144,7 @@ pilab/
 │   ├── migrate.py         # Schema migration runner
 │   └── migrations/        # Numbered SQL migration files
 ├── shared/
-│   ├── llm.py             # llama.cpp HTTP client with JSON repair
+│   ├── llm.py             # OpenAI-compatible LLM client with JSON repair
 │   ├── queue.py           # Job queue helpers
 │   └── ulid.py            # ULID generation
 ├── scout/
@@ -165,6 +164,6 @@ pilab/
 ├── dashboard/
 │   └── index.html         # Web dashboard (vanilla JS)
 ├── deploy/
-│   └── *.service           # systemd unit files
-└── tests/                  # pytest test suite (116 tests)
+│   └── *.service          # systemd unit files
+└── tests/                 # pytest test suite (117 tests)
 ```
