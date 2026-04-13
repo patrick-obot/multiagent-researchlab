@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.pilab.api</string>
+    <key>WorkingDirectory</key>
+    <string>/Users/macmini/Projects/pilab</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PILAB_DB_PATH</key>
+        <string>/Users/macmini/Projects/pilab/data/pilab.db</string>
+        <key>PATH</key>
+        <string>/Users/macmini/Projects/pilab/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/macmini/Projects/pilab/.venv/bin/uvicorn</string>
+        <string>pilab.api.main:app</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>8000</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/macmini/Projects/pilab/data/logs/api.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/macmini/Projects/pilab/data/logs/api.err.log</string>
+</dict>
+</plist>

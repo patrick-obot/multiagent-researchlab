@@ -111,6 +111,10 @@ class MilestoneStatusIn(BaseModel):
     status: str
 
 
+class ProjectRejectIn(BaseModel):
+    reason_detail: str
+
+
 class LearningIn(BaseModel):
     id: str | None = None
     project_id: str
@@ -268,6 +272,19 @@ async def approve_project(project_id: str) -> dict[str, str]:
         raise HTTPException(404, "Project not found")
     await store.approve_project(_db(), project_id)
     return {"status": "approved"}
+
+
+@app.post("/projects/{project_id}/reject")
+async def reject_project(
+    project_id: str, body: ProjectRejectIn
+) -> dict[str, str]:
+    detail = (body.reason_detail or "").strip()
+    if not detail:
+        raise HTTPException(400, "reason_detail is required")
+    rid = await store.reject_project(_db(), project_id, detail)
+    if rid is None:
+        raise HTTPException(404, "Project not found")
+    return {"status": "rejected", "rejection_id": rid}
 
 
 @app.patch("/projects/{project_id}/status")

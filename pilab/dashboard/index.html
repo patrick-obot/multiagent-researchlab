@@ -140,6 +140,7 @@
   }
   .btn:hover { opacity: 0.8; }
   .btn-approve { background: var(--approved); color: #fff; }
+  .btn-reject  { background: var(--rejected); color: #fff; margin-left: 6px; }
   .btn-sm { padding: 2px 8px; font-size: 0.7em; }
 
   /* Bottom split */
@@ -316,6 +317,7 @@
     <div class="filter-row">
       <select id="rejection-filter" onchange="loadRejections()">
         <option value="">All reasons</option>
+        <option value="human_rejected">Human Rejected</option>
         <option value="requires_gpu">Requires GPU</option>
         <option value="ram_exceeded">RAM Exceeded</option>
         <option value="no_arm_support">No ARM Support</option>
@@ -370,21 +372,33 @@ function topicTags(tags) {
   }).join(' ');
 }
 
-function makeCard(item, showApprove) {
+function makeCard(item, showApprove, kind) {
   const card = document.createElement('div');
   card.className = 'card';
   card.innerHTML = `
-    <div class="card-title">${item.title || 'Untitled'}</div>
+    <div class="card-title">${escapeHtml(item.title || 'Untitled')}</div>
     <div class="card-meta">
       ${topicTags(item.topic_tags)}
       <span class="mono">${timeAgo(item.discovered_at || item.approved_at || item.started_at)}</span>
     </div>
-    ${showApprove ? `<button class="btn btn-approve btn-sm" onclick="event.stopPropagation(); approveProject('${item.id}')">Approve</button>` : ''}
+    ${showApprove ? `
+      <button class="btn btn-approve btn-sm" onclick="event.stopPropagation(); approveProject('${item.id}')">Approve</button>
+      <button class="btn btn-reject btn-sm" onclick="event.stopPropagation(); rejectProject('${item.id}')">Reject</button>
+    ` : ''}
   `;
-  if (item.id && (item.status === 'in_progress' || item.status === 'completed' || item.status === 'awaiting_approval')) {
+  if (kind === 'finding') {
+    card.onclick = () => openFindingDetail(item.id);
+  } else if (item.id && (item.status === 'in_progress' || item.status === 'completed' || item.status === 'awaiting_approval')) {
     card.onclick = () => openProjectDetail(item.id);
   }
   return card;
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // --- Data loading ---
@@ -419,13 +433,13 @@ async function loadPipeline() {
     const scouted = await (await apiFetch('/findings?status=scouted&limit=20')).json();
     const colScouted = document.getElementById('col-scouted');
     colScouted.innerHTML = `<h3>Scouted <span class="count">${scouted.length}</span></h3>`;
-    scouted.forEach(f => colScouted.appendChild(makeCard(f, false)));
+    scouted.forEach(f => colScouted.appendChild(makeCard(f, false, 'finding')));
 
     // Evaluating (claimed jobs)
     const evaluating = await (await apiFetch('/findings?status=evaluating&limit=20')).json();
     const colEval = document.getElementById('col-evaluating');
     colEval.innerHTML = `<h3>Evaluating <span class="count">${evaluating.length}</span></h3>`;
-    evaluating.forEach(f => colEval.appendChild(makeCard(f, false)));
+    evaluating.forEach(f => colEval.appendChild(makeCard(f, false, 'finding')));
 
     // Awaiting approval (projects)
     const awaiting = await (await apiFetch('/projects?status=awaiting_approval')).json();
@@ -470,9 +484,9 @@ async function loadRejections() {
     const rejections = await (await apiFetch(url)).json();
     const list = document.getElementById('rejections-list');
     list.innerHTML = rejections.map(r => `
-      <div class="rejection-item">
-        <span class="reason-code">${r.reason_code || 'unknown'}</span>
-        <span style="margin-left:8px">${r.reason_detail || ''}</span>
+      <div class="rejection-item" style="cursor:pointer" onclick="openFindingDetail('${r.finding_id}')">
+        <span class="reason-code">${escapeHtml(r.reason_code || 'unknown')}</span>
+        <span style="margin-left:8px">${escapeHtml(r.reason_detail || '')}</span>
         <span class="mono" style="margin-left:8px;color:var(--text-dim)">${timeAgo(r.rejected_at)}</span>
       </div>
     `).join('');
@@ -488,6 +502,26 @@ async function approveProject(projectId) {
   } catch (e) { console.error('Approve failed:', e); }
 }
 
+async function rejectProject(projectId) {
+  const reason = window.prompt('Reason for rejecting this project?');
+  if (reason == null) return;              // cancelled
+  const trimmed = reason.trim();
+  if (!trimmed) { alert('A reason is required to reject.'); return; }
+  try {
+    const resp = await apiFetch(`/projects/${projectId}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason_detail: trimmed }),
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      alert(`Reject failed: ${resp.status} ${err}`);
+      return;
+    }
+    await refresh();
+  } catch (e) { console.error('Reject failed:', e); alert('Reject failed: ' + e.message); }
+}
+
 async function updateMilestoneStatus(milestoneId, status) {
   try {
     await apiFetch(`/milestones/${milestoneId}/status`, {
@@ -498,6 +532,69 @@ async function updateMilestoneStatus(milestoneId, status) {
   } catch (e) { console.error('Milestone update failed:', e); }
 }
 
+// --- Finding detail modal ---
+
+async function openFindingDetail(findingId) {
+  try {
+    const fResp = await apiFetch(`/findings/${findingId}`);
+    if (!fResp.ok) { console.error('Finding not found', findingId); return; }
+    const f = await fResp.json();
+
+    let evaluation = null;
+    const eResp = await apiFetch(`/evaluations/${findingId}`);
+    if (eResp.ok) evaluation = await eResp.json();
+
+    document.getElementById('modal-title').textContent = f.title || 'Untitled';
+
+    const sourceLink = f.source_url
+      ? `<a href="${escapeHtml(f.source_url)}" target="_blank" rel="noopener"
+            style="color:var(--scout);word-break:break-all">${escapeHtml(f.source_url)}</a>`
+      : '<span style="color:var(--text-dim)">(no URL)</span>';
+
+    let html = `
+      <p style="font-size:0.8em;color:var(--text-dim);margin-bottom:12px">
+        <span class="status-badge ${f.status}">${escapeHtml(f.status)}</span>
+        &nbsp; <span class="mono">${escapeHtml(f.source_type || '')}</span>
+        &nbsp; ${topicTags(f.topic_tags)}
+        &nbsp; <span class="mono">${timeAgo(f.discovered_at)}</span>
+      </p>
+      <p style="font-size:0.8em;margin-bottom:14px">Source: ${sourceLink}</p>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;
+                  padding:12px;font-size:0.88em;line-height:1.5;white-space:pre-wrap;
+                  margin-bottom:14px">${escapeHtml(f.summary || '(no summary)')}</div>
+    `;
+
+    if (evaluation) {
+      const gpu = evaluation.requires_gpu ? 'yes' : 'no';
+      const ram = evaluation.ram_estimate_gb != null ? `${evaluation.ram_estimate_gb} GB` : '—';
+      const verdictColor = evaluation.verdict === 'approved' ? 'var(--approved)' : 'var(--rejected)';
+      html += `
+        <h3 style="font-size:0.8em;text-transform:uppercase;letter-spacing:1px;
+                   color:var(--text-dim);margin-bottom:8px">Evaluation</h3>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;
+                    padding:12px;font-size:0.85em;margin-bottom:10px">
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+            <span>Novelty: <strong>${evaluation.novelty_score ?? '—'}/10</strong></span>
+            <span>Feasibility: <strong>${evaluation.pi_feasibility_score ?? '—'}/10</strong></span>
+            <span>RAM: <strong>${ram}</strong></span>
+            <span>GPU: <strong>${gpu}</strong></span>
+            <span>Verdict: <strong style="color:${verdictColor}">${escapeHtml(evaluation.verdict || '—')}</strong></span>
+          </div>
+          ${evaluation.verdict_reason ? `<div style="color:var(--text-dim);margin-top:6px">
+            <em>Reason:</em> ${escapeHtml(evaluation.verdict_reason)}
+          </div>` : ''}
+          ${evaluation.feasibility_notes ? `<div style="color:var(--text-dim);margin-top:6px">
+            <em>Notes:</em> ${escapeHtml(evaluation.feasibility_notes)}
+          </div>` : ''}
+        </div>
+      `;
+    }
+
+    document.getElementById('modal-body').innerHTML = html;
+    document.getElementById('modal-overlay').classList.add('active');
+  } catch (e) { console.error('Finding detail failed:', e); }
+}
+
 // --- Project detail modal ---
 
 async function openProjectDetail(projectId) {
@@ -505,6 +602,13 @@ async function openProjectDetail(projectId) {
     const project = await (await apiFetch(`/projects/${projectId}`)).json();
     const milestones = await (await apiFetch(`/projects/${projectId}/milestones`)).json();
     const learnings = await (await apiFetch(`/projects/${projectId}/learnings`)).json();
+
+    // Fetch originating finding for source URL + summary
+    let finding = null;
+    if (project.finding_id) {
+      const fr = await apiFetch(`/findings/${project.finding_id}`);
+      if (fr.ok) finding = await fr.json();
+    }
 
     document.getElementById('modal-title').textContent = project.title;
 
@@ -518,6 +622,22 @@ async function openProjectDetail(projectId) {
       Status: <span class="status-badge ${project.status}">${project.status}</span>
       &nbsp; Topics: ${topicTags(project.topic_tags)}
     </p>`;
+
+    if (finding) {
+      const srcLink = finding.source_url
+        ? `<a href="${escapeHtml(finding.source_url)}" target="_blank" rel="noopener"
+              style="color:var(--scout);word-break:break-all">${escapeHtml(finding.source_url)}</a>`
+        : '<span style="color:var(--text-dim)">(no URL)</span>';
+      html += `
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;
+                    padding:12px;margin-bottom:16px;font-size:0.85em">
+          <div style="color:var(--text-dim);font-size:0.75em;text-transform:uppercase;
+                      letter-spacing:1px;margin-bottom:6px">Source</div>
+          <div style="margin-bottom:8px">${srcLink}</div>
+          <div style="white-space:pre-wrap;line-height:1.5">${escapeHtml(finding.summary || '(no summary)')}</div>
+        </div>
+      `;
+    }
 
     html += '<div>';
     milestones.forEach(ms => {

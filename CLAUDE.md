@@ -28,8 +28,8 @@ Agents scout, evaluate, and plan AI/Telco/Fintech/Edge research using local LLMs
 | Host | Role | Port | Storage |
 |------|------|------|---------|
 | mypi | llama.cpp RPC master + exo node | 50052 | 1TB NVMe |
-| pi2 | llama.cpp RPC worker | 50052 | 256GB SSD |
-| pi3 | llama.cpp RPC worker | 50052 | 256GB SSD |
+| mypi2 | llama.cpp RPC worker | 50052 | 256GB SSD |
+| mypi3 | llama.cpp RPC worker | 50052 | 256GB SSD |
 
 All Pis: Raspberry Pi 5, 8GB RAM, ARM aarch64, gigabit ethernet.
 

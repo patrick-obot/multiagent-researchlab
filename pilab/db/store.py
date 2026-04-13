@@ -15,6 +15,7 @@ import aiosqlite
 
 from pilab import config
 from pilab.db.migrate import apply_migrations
+from pilab.shared.ulid import new_ulid
 
 log = logging.getLogger(__name__)
 
@@ -244,6 +245,39 @@ async def approve_project(
         (approved_by, _now(), project_id),
     )
     await db.commit()
+
+
+async def reject_project(
+    db: aiosqlite.Connection,
+    project_id: str,
+    reason_detail: str,
+) -> str | None:
+    """Mark a project rejected by a human and record it in the rejections table.
+
+    Returns the new rejection row id, or None if the project does not exist.
+    Uses reason_code='human_rejected' to distinguish from evaluator rejections.
+    """
+    async with db.execute(
+        "SELECT finding_id, evaluation_id FROM projects WHERE id = ?",
+        (project_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    if not row:
+        return None
+
+    await db.execute(
+        "UPDATE projects SET status = 'rejected' WHERE id = ?",
+        (project_id,),
+    )
+    rid = new_ulid()
+    await db.execute(
+        """INSERT INTO rejections
+           (id, finding_id, evaluation_id, reason_code, reason_detail, rejected_at)
+           VALUES (?, ?, ?, 'human_rejected', ?, ?)""",
+        (rid, row["finding_id"], row["evaluation_id"], reason_detail, _now()),
+    )
+    await db.commit()
+    return rid
 
 
 # -------------------------------------------------------------------

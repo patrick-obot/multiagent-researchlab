@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.pilab.scout</string>
+    <key>WorkingDirectory</key>
+    <string>/Users/macmini/Projects/pilab</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PILAB_LLM_SCOUT_MODEL</key>
+        <string>phi3:mini</string>
+        <key>PATH</key>
+        <string>/Users/macmini/Projects/pilab/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>until /usr/bin/curl -sf http://127.0.0.1:8000/docs >/dev/null; do sleep 0.5; done; exec /Users/macmini/Projects/pilab/.venv/bin/python -m pilab.scout.agent</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/macmini/Projects/pilab/data/logs/scout.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/macmini/Projects/pilab/data/logs/scout.err.log</string>
+</dict>
+</plist>
