@@ -41,19 +41,35 @@ def _fix_trailing_commas(text: str) -> str:
 
 
 def _extract_json_object(text: str) -> str | None:
-    """Try to extract the first { ... } or [ ... ] from the text."""
-    for opener, closer in [("{", "}"), ("[", "]")]:
-        start = text.find(opener)
-        if start == -1:
-            continue
-        depth = 0
-        for i in range(start, len(text)):
-            if text[i] == opener:
-                depth += 1
-            elif text[i] == closer:
-                depth -= 1
-                if depth == 0:
-                    return text[start : i + 1]
+    """Try to extract the outermost { ... } or [ ... ] from the text.
+
+    Uses the opener that appears *first* in the text so that arrays of
+    objects (which contain nested `{`) don't get mis-extracted as the
+    first inner object.
+    """
+    brace_pos = text.find("{")
+    bracket_pos = text.find("[")
+
+    candidates: list[tuple[int, str, str]] = []
+    if brace_pos != -1:
+        candidates.append((brace_pos, "{", "}"))
+    if bracket_pos != -1:
+        candidates.append((bracket_pos, "[", "]"))
+    if not candidates:
+        return None
+
+    # Whichever opener appears first in the string is the outer structure.
+    candidates.sort()
+    start, opener, closer = candidates[0]
+
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == opener:
+            depth += 1
+        elif text[i] == closer:
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
     return None
 
 

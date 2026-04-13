@@ -45,8 +45,23 @@ async def generate_milestones(client: httpx.AsyncClient, project: dict) -> None:
         temperature=config.PLANNER_MILESTONES_TEMPERATURE,
     )
 
+    # Defensive unwrap: if the model returns {"milestones": [...]} instead
+    # of the bare array, accept the inner list. Same for any single list value.
+    if isinstance(milestones, dict):
+        list_values = [v for v in milestones.values() if isinstance(v, list)]
+        if len(list_values) == 1:
+            log.warning(
+                "Planner LLM returned dict-wrapped milestones; unwrapping "
+                "(keys=%s)", list(milestones.keys()),
+            )
+            milestones = list_values[0]
+
     if not isinstance(milestones, list):
-        log.error("Expected list of milestones, got %s", type(milestones))
+        log.error(
+            "Expected list of milestones, got %s; payload=%r",
+            type(milestones).__name__,
+            str(milestones)[:300],
+        )
         return
 
     for ms in milestones:

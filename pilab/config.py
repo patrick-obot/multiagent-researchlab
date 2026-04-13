@@ -208,10 +208,12 @@ PLANNER_MILESTONES_SYSTEM: str = (
     "each completable in 1-3 days, clear done_condition, "
     "first milestone = environment setup, last = document learnings. "
     "Categories: setup|research|implementation|testing|benchmarking|documentation. "
-    'Return: [{"sequence": int, "title": str, "description": str, '
-    '"done_condition": str, "category": str, "estimated_days": int}]'
+    'Each object: {"sequence": int, "title": str, "description": str, '
+    '"done_condition": str, "category": str, "estimated_days": int}. '
+    "Respond with ONLY the raw JSON array. No preamble, no explanation, "
+    "no markdown code fences. Start your response with [ and end with ]."
 )
-PLANNER_MILESTONES_MAX_TOKENS: int = 800
+PLANNER_MILESTONES_MAX_TOKENS: int = 1500
 PLANNER_MILESTONES_TEMPERATURE: float = 0.3
 
 PLANNER_LEARNING_SYSTEM: str = (
