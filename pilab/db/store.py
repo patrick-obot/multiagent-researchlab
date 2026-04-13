@@ -203,17 +203,27 @@ async def list_projects(
     status: str | None = None,
     topic: str | None = None,
 ) -> list[Row]:
+    """List projects with the originating finding's discovered_at joined in.
+
+    `finding_discovered_at` is surfaced so the dashboard can show a
+    sensible "time ago" on awaiting_approval cards (which have no
+    project-level timestamps of their own yet).
+    """
     clauses: list[str] = []
     params: list[Any] = []
     if status:
-        clauses.append("status = ?")
+        clauses.append("p.status = ?")
         params.append(status)
     if topic:
-        clauses.append("topic_tags LIKE ?")
+        clauses.append("p.topic_tags LIKE ?")
         params.append(f"%{topic}%")
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     async with db.execute(
-        f"SELECT * FROM projects {where} ORDER BY approved_at DESC NULLS LAST, id DESC",
+        f"""SELECT p.*, f.discovered_at AS finding_discovered_at
+            FROM projects p
+            LEFT JOIN findings f ON f.id = p.finding_id
+            {where}
+            ORDER BY p.approved_at DESC NULLS LAST, p.id DESC""",
         params,
     ) as cur:
         return await cur.fetchall()

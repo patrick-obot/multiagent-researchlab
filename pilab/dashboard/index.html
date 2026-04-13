@@ -400,10 +400,10 @@ function makeCard(item, showApprove, kind) {
   const card = document.createElement('div');
   card.className = 'card';
   card.innerHTML = `
-    <div class="card-title">${escapeHtml(item.title || 'Untitled')}</div>
+    <div class="card-title">${escapeHtml(cleanTitle(item.title) || 'Untitled')}</div>
     <div class="card-meta">
       ${topicTags(item.topic_tags)}
-      <span class="mono">${timeAgo(item.discovered_at || item.approved_at || item.started_at)}</span>
+      <span class="mono">${timeAgo(item.started_at || item.approved_at || item.discovered_at || item.finding_discovered_at)}</span>
     </div>
     ${showApprove ? `
       <button class="btn btn-approve btn-sm" onclick="event.stopPropagation(); approveProject('${item.id}')">Approve</button>
@@ -423,6 +423,19 @@ function escapeHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Strip Reddit-style flair tags like [D], [P], [R], [Project], [Discussion]
+// from the start or end of a title. Only matches a single alphabetical word
+// 1-10 chars ([Discussion] is the longest real ML flair), so "[not a flair]"
+// (contains spaces) and "[LongerAnnotation]" (>10 chars) are preserved.
+// Raw title is preserved in the DB — this is display-side only.
+function cleanTitle(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/^\s*\[[A-Za-z]{1,10}\]\s*/, '')
+    .replace(/\s*\[[A-Za-z]{1,10}\]\s*$/, '')
+    .trim();
 }
 
 // --- Data loading ---
@@ -574,7 +587,7 @@ async function openFindingDetail(findingId) {
     const eResp = await apiFetch(`/evaluations/${findingId}`);
     if (eResp.ok) evaluation = await eResp.json();
 
-    document.getElementById('modal-title').textContent = f.title || 'Untitled';
+    document.getElementById('modal-title').textContent = cleanTitle(f.title) || 'Untitled';
 
     const sourceLink = f.source_url
       ? `<a href="${escapeHtml(f.source_url)}" target="_blank" rel="noopener"
@@ -640,7 +653,7 @@ async function openProjectDetail(projectId) {
       if (fr.ok) finding = await fr.json();
     }
 
-    document.getElementById('modal-title').textContent = project.title;
+    document.getElementById('modal-title').textContent = cleanTitle(project.title);
 
     const learningsByMs = {};
     learnings.forEach(l => {
