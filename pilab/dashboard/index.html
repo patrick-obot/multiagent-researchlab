@@ -561,6 +561,9 @@ async function rejectProject(projectId) {
       alert(`Reject failed: ${resp.status} ${err}`);
       return;
     }
+    // Close the project detail modal if it happens to be open
+    // (reject can be triggered from the modal itself).
+    document.getElementById('modal-overlay').classList.remove('active');
     await refresh();
   } catch (e) { console.error('Reject failed:', e); alert('Reject failed: ' + e.message); }
 }
@@ -710,6 +713,23 @@ async function openProjectDetail(projectId) {
       `;
     });
     html += '</div>';
+
+    // Danger zone — allow rejecting a project after reading through it.
+    // Only for non-terminal statuses (not already rejected/completed).
+    const rejectable = ['awaiting_approval', 'approved', 'in_progress'].includes(project.status);
+    if (rejectable) {
+      html += `
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);
+                    display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:0.75em;color:var(--text-dim)">
+            Read through and decided it's not worth pursuing?
+          </span>
+          <button class="btn btn-reject btn-sm" onclick="rejectProject('${project.id}')">
+            Reject project
+          </button>
+        </div>
+      `;
+    }
 
     document.getElementById('modal-body').innerHTML = html;
     document.getElementById('modal-overlay').classList.add('active');
