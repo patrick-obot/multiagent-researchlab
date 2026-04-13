@@ -81,11 +81,27 @@
   /* Pipeline columns */
   .pipeline {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 12px;
     padding: 0 24px 20px;
     min-height: 300px;
   }
+
+  /* Pulsing dot for "currently being worked on by planner" cards */
+  .planning-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--planner);
+    margin-right: 5px;
+    animation: pulse 1.4s ease-in-out infinite;
+    vertical-align: middle;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.35; transform: scale(0.9); }
+    50%      { opacity: 1;    transform: scale(1.15); }
+  }
+  #col-planning h3 { color: var(--planner); }
   .column {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -298,6 +314,9 @@
   <div class="column" id="col-awaiting">
     <h3>Awaiting Approval <span class="count" id="cnt-awaiting">0</span></h3>
   </div>
+  <div class="column" id="col-planning">
+    <h3><span class="planning-dot"></span>Planning <span class="count" id="cnt-planning">0</span></h3>
+  </div>
   <div class="column" id="col-inprogress">
     <h3>In Progress <span class="count" id="cnt-inprogress">0</span></h3>
   </div>
@@ -388,7 +407,7 @@ function makeCard(item, showApprove, kind) {
   `;
   if (kind === 'finding') {
     card.onclick = () => openFindingDetail(item.id);
-  } else if (item.id && (item.status === 'in_progress' || item.status === 'completed' || item.status === 'awaiting_approval')) {
+  } else if (item.id && (item.status === 'in_progress' || item.status === 'completed' || item.status === 'awaiting_approval' || item.status === 'approved')) {
     card.onclick = () => openProjectDetail(item.id);
   }
   return card;
@@ -446,6 +465,12 @@ async function loadPipeline() {
     const colAwaiting = document.getElementById('col-awaiting');
     colAwaiting.innerHTML = `<h3>Awaiting Approval <span class="count">${awaiting.length}</span></h3>`;
     awaiting.forEach(p => colAwaiting.appendChild(makeCard(p, true)));
+
+    // Planning (approved but planner hasn't generated milestones yet)
+    const planning = await (await apiFetch('/projects?status=approved')).json();
+    const colPlanning = document.getElementById('col-planning');
+    colPlanning.innerHTML = `<h3><span class="planning-dot"></span>Planning <span class="count">${planning.length}</span></h3>`;
+    planning.forEach(p => colPlanning.appendChild(makeCard(p, false)));
 
     // In progress
     const inProgress = await (await apiFetch('/projects?status=in_progress')).json();
