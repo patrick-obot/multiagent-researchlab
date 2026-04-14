@@ -207,6 +207,18 @@ async def _poll_loop() -> None:
                 await _api_patch(client, f"/jobs/{job['id']}/fail?error_message=finding_not_found")
                 continue
 
+            # Mark the finding as being actively evaluated so it shows up in the
+            # dashboard's Evaluating column while the LLM calls are running.
+            # The approved/rejected transition inside _evaluate_finding will
+            # move it out of this state a minute or so later.
+            try:
+                await _api_patch(
+                    client, f"/findings/{finding['id']}/status",
+                    {"status": "evaluating"},
+                )
+            except Exception:
+                log.warning("Could not set finding to evaluating", exc_info=True)
+
             # Evaluate
             try:
                 await _evaluate_finding(client, finding)
@@ -233,8 +245,39 @@ async def _heartbeat() -> None:
         await asyncio.sleep(config.HEARTBEAT_INTERVAL)
 
 
+async def _reset_orphaned_evaluating() -> None:
+    """Reset any findings stuck in 'evaluating' from a previous crash.
+
+    If the evaluator died mid-LLM-call, the finding was flipped to
+    'evaluating' but never transitioned to approved/rejected. Reset those
+    back to 'scouted' on startup so the job queue's reaper picks them
+    up and re-dispatches. Runs once at agent start.
+    """
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            orphans = await _api_get(client, "/findings", status="evaluating") or []
+        except Exception:
+            log.warning("Startup orphan check failed", exc_info=True)
+            return
+        if not orphans:
+            return
+        log.info("Resetting %d orphaned 'evaluating' finding(s) to 'scouted'", len(orphans))
+        for f in orphans:
+            try:
+                await _api_patch(
+                    client, f"/findings/{f['id']}/status",
+                    {"status": "scouted"},
+                )
+            except Exception:
+                log.warning("Could not reset finding %s", f.get("id"), exc_info=True)
+
+
 async def main() -> None:
     log.info("Evaluator agent starting")
+
+    # Wait briefly for the API to be ready (launchd startup race protection
+    # is in the plist wrapper, but this call happens after the wrapper exits).
+    await _reset_orphaned_evaluating()
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
